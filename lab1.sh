@@ -57,9 +57,14 @@ function setup_environment()
 #	Finally lets post this ssh key:
 	ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts"
 	git_ssl_keyid="$(curl -s -H "Authorization: token ${GIT_API_TOKEN}" -H "Accept: application/vnd.github.v3+json" -X POST -d "{\"title\":\"${git_ssl_keyname}\",\"key\":\"${sslpub}\"}" "${git_api_addkey}" | jq -r '.id')"
-	if ssh -T git@github.com -i "${GITHUB_SSH_KEY}" &> /dev/null;
+	ssh -T git@github.com -i "${GITHUB_SSH_KEY}" &> /dev/null
+	# 1 is for regular no access via command line (i.e. success) ... 255 is for login error
+	if [ "$?" -eq 1 ];
 	then
 		echo 'end setup_environment()';
+	else
+		echo "Adding Git Hub key failed"
+		exit 1
 	fi
 };
 
@@ -282,5 +287,5 @@ secure_build_application;
 delete_git_key;
 verify_application;
 deploy_application;
-echo -e "\n${!APP_URL}"
+echo -e "\n${APP_STRING}"
 #clean_up;

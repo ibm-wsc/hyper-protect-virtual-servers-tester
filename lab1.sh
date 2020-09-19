@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Save PROJECT_DIR to use throughout script as directory where project exists
+export PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # This is the file where user variables are entered
 source user_variables.env
 
@@ -12,16 +15,34 @@ function prereq_check()
 	# Check if curl exists
 	if ! command -v curl &> /dev/null;
 	then
-		echo -e "\nPlease install curl"
+		printErr "Please install curl"
 		exit 1
 	fi
 
 	# Check if jq exists
 	if ! command -v jq &> /dev/null;
 	then
-		echo -e "\nPlease install jq"
+		printErr "Please install jq"
 		exit 1
 	fi
+}
+
+function printErr {
+	echo
+    cat <<< "$@" 1>&2
+	echo
+}
+
+function update_image_number()
+{
+	if [ -z "${IMAGE_NUMBER}" ]
+	then
+		printErr "IMAGE_NUMBER must be set...";
+		exit 1;
+	fi;
+	export IMAGE_NUMBER="$(( IMAGE_NUMBER + 1 ))";
+	echo -e "\nIncremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n"
+	echo "${IMAGE_NUMBER}" > "${PROJECT_DIR}/IMAGE_NUMBER.txt";
 }
 
 function setup_environment()
@@ -63,7 +84,7 @@ function setup_environment()
 	then
 		echo 'end setup_environment()';
 	else
-		echo "Adding Git Hub key failed"
+		printErr "Adding Git Hub key failed"
 		exit 1
 	fi
 };
@@ -106,8 +127,8 @@ function create_certificate_and_key()
 		--env={EX_VOLUMES="/docker,/data",ROOTFS_LOCK=y,CLIENT_CRT=$cert} \
 		--ports "{containerport = 443, protocol = tcp, hostport = ${SB_PORT}}";
 	else
-		echo -e "\nImage SecureDockerBuild doesn't exist please upload it"
-		echo -e "\nWe can go no further without it..."
+		printErr "Image SecureDockerBuild doesn't exist please upload it"
+		printErr "We can go no further without it..."
 		exit 1
 	fi;
 };
@@ -204,6 +225,18 @@ function verify_application()
 	pushd "${SB_DIR}/manifest" > /dev/null;
 	export BUILD_NAME="$(hpvs sb status --config "${SB_DIR}/sb_config.yaml" | grep build_name | egrep -ow 'docker.*[[:digit:]]')";
 	echo -e "\nRetrieving secure build manifest...";
+	local manifest_tries=0
+	until hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}" &> /dev/null;
+	do
+		sleep 1;
+		echo -e "\nCould not retrieve manifest\nRetrying...";
+		manifest_tries="$(( manifest_tries + 1 ))"
+		if [[ manifest_tries -gt 3 ]];
+		then
+			printErr "Could not retrieve manifest after 3 attempts, skipping verify..."
+			return 1;
+		fi;
+	done;
 	hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
 	echo -e "\nRetrieving secure build public key..."
 	hpvs sb pubkey --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
@@ -267,7 +300,7 @@ function clean_up()
 	fi;
 	rm -rf "${SB_DIR}";
 
-	if ! hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null || [[ "$(hpvs registry list | wc -l)" -eq 4 ]];
+	if hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null && [[ "$(hpvs registry list | wc -l)" -ne 4 ]];
 	then
 		echo -e "\nCleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}..."
 		hpvs registry delete --name "${REGISTRY_NAME}"
@@ -280,7 +313,10 @@ function clean_up()
 };
 
 prereq_check;
+## clean up previous (if using non-incremented image #)
 clean_up;
+## update IMAGE_NUMBER for new run
+update_image_number && source user_variables.env;
 setup_environment;
 create_certificate_and_key;
 secure_build_application;

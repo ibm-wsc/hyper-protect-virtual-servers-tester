@@ -4,24 +4,33 @@
 
 The ones you must enter are labeled `MUST ENTER`
 
-`IMAGE_NUMBER` lets you increment your image numbers so old repos that have trapped notary server keys can be left behind 
+## Variables managed by Script
+
+The script automatically increments `IMAGE_NUMBER` and stores it in `IMAGE_NUMBER.txt` in your script directory to get around Docker repositories with "stranded signing keys"
 <details>
 <summary>edit the following section {expand me for details}</summary>
 
 ```
+## Managed by Script
 ########################################################
-## Increment this number to get around problem of image name already used in notary server
+## This number is incremented automatically by script 
+## Gets around problem of image name already used in notary server
 ## for keys in Docker Hub
-export IMAGE_NUMBER="21";
+if [ -w "${PROJECT_DIR}/IMAGE_NUMBER.txt" ];
+then
+    export IMAGE_NUMBER=$(<"${PROJECT_DIR}/IMAGE_NUMBER.txt")
+else
+	export IMAGE_NUMBER=${IMAGE_NUMBER:-"0"}
+fi
 ########################################################
 ```
 </details>
 
 Others may be of use depending on the circumstance...
 
-## Example Script Runthrough
+## Example Script Runthroughs
 <details>
-<summary>Go Hello World Build (USE_GO=1) [tl;dr ~ 5 minute runtime] {expand me for details} </summary>
+<summary>Go Hello World Build (USE_GO=1) [tl;dr ~ 5 minutes of runtime] {expand me for details} </summary>
 
 ```
 time ./lab1.sh 

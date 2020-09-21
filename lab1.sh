@@ -15,21 +15,22 @@ function prereq_check()
 	# Check if curl exists
 	if ! command -v curl &> /dev/null;
 	then
-		printErr "Please install curl"
-		exit 1
-	fi
+		printErr "Please install curl";
+		exit 1;
+	fi;
 
 	# Check if jq exists
 	if ! command -v jq &> /dev/null;
 	then
-		printErr "Please install jq"
-		exit 1
-	fi
+		printErr "Please install jq";
+		exit 1;
+	fi;
 }
 
-function printErr {
+function printErr()
+{
 	echo
-    cat <<< "$@" 1>&2
+	cat <<< "$@" 1>&2;
 	echo
 }
 
@@ -41,7 +42,7 @@ function update_image_number()
 		exit 1;
 	fi;
 	export IMAGE_NUMBER="$(( IMAGE_NUMBER + 1 ))";
-	echo -e "\nIncremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n"
+	echo -e "\nIncremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n";
 	echo "${IMAGE_NUMBER}" > "${PROJECT_DIR}/IMAGE_NUMBER.txt";
 }
 
@@ -84,9 +85,9 @@ function setup_environment()
 	then
 		echo 'end setup_environment()';
 	else
-		printErr "Adding Git Hub key failed"
-		exit 1
-	fi
+		printErr "Adding Git Hub key failed";
+		exit 1;
+	fi;
 };
 
 function create_certificate_and_key()
@@ -113,12 +114,12 @@ function create_certificate_and_key()
 	echo $(cat "${SB_DIR}/sbs_keys/sbs.cert" | base64) | tr -d ' ' > "${SB_DIR}/sbs_keys/sbs_base64.cert";
 	export cert=$(cat "${SB_DIR}/sbs_keys/sbs_base64.cert");
 
-	echo -e "\nCreating quotagroup sb_user${HPVS_NUMBER} for Hyper Protect Secure Build Server..."
+	echo -e "\nCreating quotagroup sb_user${HPVS_NUMBER} for Hyper Protect Secure Build Server...";
 	hpvs quotagroup create --name "sb_user${HPVS_NUMBER}" --size=40GB;
 
 	if [[ $(hpvs image list | grep -ic 'SecureDockerBuild') -lt 1 ]];
 	then
-		echo -e "\nCreating Hyper Protect Secure Build Server: sbserver_${HPVS_NUMBER}..."
+		echo -e "\nCreating Hyper Protect Secure Build Server: sbserver_${HPVS_NUMBER}...";
 		hpvs vs create --name sbserver_${HPVS_NUMBER} --repo SecureDockerBuild \
 		--tag ${base_image_tag} --cpu 2 --ram 2048 \
 		--quotagroup "{quotagroup = sb_user${HPVS_NUMBER}, mountid = new, mount = /newroot, filesystem = ext4, size = 10GB}" \
@@ -127,9 +128,9 @@ function create_certificate_and_key()
 		--env={EX_VOLUMES="/docker,/data",ROOTFS_LOCK=y,CLIENT_CRT=$cert} \
 		--ports "{containerport = 443, protocol = tcp, hostport = ${SB_PORT}}";
 	else
-		printErr "Image SecureDockerBuild doesn't exist please upload it"
-		printErr "We can go no further without it..."
-		exit 1
+		printErr "Image SecureDockerBuild doesn't exist please upload it";
+		printErr "We can go no further without it...";
+		exit 1;
 	fi;
 };
 
@@ -137,7 +138,7 @@ function create_certificate_and_key()
 
 function secure_build_application()
 {
-	echo -e "\nGenerating GPG keys to encrypt the image repository definition once the image is built..."
+	echo -e "\nGenerating GPG keys to encrypt the image repository definition once the image is built...";
 	export keyName="secure_bitcoin_key${RANDOM}";
 	export passphrase="test_passphrase";
 	[[ ! -d "${SB_DIR}/registration_keys" ]] && mkdir -p "${SB_DIR}/registration_keys";
@@ -196,26 +197,24 @@ EOF
 		echo -e "\nWaiting for Secure Build Server to become available for initialization...taking a 20 second nap.";
 		sleep 20;
 	done;
-	echo -e "\nSecure build server initialized"
-	echo -e "\nSecurely Building Container Image: ${IMAGE_NAME}..."
+	echo -e "\nSecure build server initialized";
+	echo -e "\nSecurely Building Container Image: ${IMAGE_NAME}...";
 	hpvs sb build --timeout 20 --config "${SB_DIR}/sb_config.yaml";
-#	hpvs sb log --config "${SB_DIR}/sb_config.yaml";
-#	hpvs sb status --config "${SB_DIR}/sb_config.yaml"
-	echo -e "\nEncrypting registration file with GPG key..."
+	echo -e "\nEncrypting registration file with GPG key...";
 	echo "${passphrase}" | hpvs sb regfile --config "${SB_DIR}/sb_config.yaml" --out "${SB_DIR}/yaml.${REPO_ID}.enc";
 };
 
 function delete_git_key()
 {
 	# delete git key for build if keyid created this run through
-	local git_api_keyurl="https://api.github.com/user/keys/${git_ssl_keyid}"
+	local git_api_keyurl="https://api.github.com/user/keys/${git_ssl_keyid}";
 	if [[ -n "${git_ssl_keyid}" ]];
 	then
-		echo -e "\nFor Git Hub account assocaited with the provided GIT_API_TOKEN:"
-		echo -e "\tRemoving git key ID: ${git_ssl_keyid}..."
-		curl -H "Authorization: token ${GIT_API_TOKEN}" -H "Accept: application/vnd.github.v3+json" -X DELETE "${git_api_keyurl}"
+		echo -e "\nFor Git Hub account assocaited with the provided GIT_API_TOKEN:";
+		echo -e "\tRemoving git key ID: ${git_ssl_keyid}...";
+		curl -H "Authorization: token ${GIT_API_TOKEN}" -H "Accept: application/vnd.github.v3+json" -X DELETE "${git_api_keyurl}";
 	else
-		echo -e "\nA git key hasn't been uploaded at this point in the script run."
+		echo -e "\nA git key hasn't been uploaded at this point in the script run.";
 	fi; 
 }
 
@@ -225,26 +224,26 @@ function verify_application()
 	pushd "${SB_DIR}/manifest" > /dev/null;
 	export BUILD_NAME="$(hpvs sb status --config "${SB_DIR}/sb_config.yaml" | grep build_name | egrep -ow 'docker.*[[:digit:]]')";
 	echo -e "\nRetrieving secure build manifest...";
-	local manifest_tries=0
+	local manifest_tries=0;
 	until hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}" &> /dev/null;
 	do
 		sleep 1;
 		echo -e "\nCould not retrieve manifest\nRetrying...";
-		manifest_tries="$(( manifest_tries + 1 ))"
+		manifest_tries="$(( manifest_tries + 1 ))";
 		if [[ manifest_tries -gt 3 ]];
 		then
-			printErr "Could not retrieve manifest after 3 attempts, skipping verify..."
+			printErr "Could not retrieve manifest after 3 attempts, skipping verify...";
 			return 1;
 		fi;
 	done;
 	hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
-	echo -e "\nRetrieving secure build public key..."
+	echo -e "\nRetrieving secure build public key...";
 	hpvs sb pubkey --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
 	echo -e "\nFiles retrieved:";
 	ls;
 	export MANIFEST="${SB_DIR}/manifest/manifest.${BUILD_NAME}";
 	export MAN_PUBKEY="${SB_DIR}/manifest/${BUILD_NAME}-public.pem";
-	echo -e "\nVerifying build integrity with manifest and public key..."
+	echo -e "\nVerifying build integrity with manifest and public key...";
 	tar -xjvf "${MANIFEST}.sig.tbz" > /dev/null && rm "${MANIFEST}.sig.tbz";
 	cat "${MANIFEST}.sig" | xxd -r -p > "${MANIFEST}.sig.bin";
 	openssl dgst -sha256 -binary -out "${MANIFEST}.tbz.sha256" "${MANIFEST}.tbz";
@@ -257,16 +256,16 @@ function verify_application()
 
 function deploy_application()
 {
-	echo -e "\nRegistering ${REPO_ID} container repository with Hyper Protect Virtual Servers appliance..."
+	echo -e "\nRegistering ${REPO_ID} container repository with Hyper Protect Virtual Servers appliance...";
 	hpvs repository register --pgp="${SB_DIR}/yaml.${REPO_ID}.enc" --id="${REPO_ID}";
-	echo -e "\nCreating quotagroup to deploy application using image repository: ${REPO_ID}..."
+	echo -e "\nCreating quotagroup to deploy application using image repository: ${REPO_ID}...";
 	hpvs quotagroup create --name="${REPO_ID}" --size=5GB;
-	echo -e "\nCreating Hyper Protect Virtual Servers application using image repository: ${REPO_ID}..."
+	echo -e "\nCreating Hyper Protect Virtual Servers application using image repository: ${REPO_ID}...";
 	export APP_PORT=301${HPVS_NUMBER};
 	hpvs vs create --name=${REPO_ID} --repo ${REPO_ID} \
---tag latest --cpu 2 --ram 2048 \
---quotagroup "{quotagroup = ${REPO_ID}, mountid = new, mount = /newroot, filesystem = btrfs, size = 4GB}" \
---ports "{containerport = ${INTERNAL_APP_PORT}, protocol = tcp, hostport = ${APP_PORT}}"
+	--tag latest --cpu 2 --ram 2048 \
+	--quotagroup "{quotagroup = ${REPO_ID}, mountid = new, mount = /newroot, filesystem = btrfs, size = 4GB}" \
+	--ports "{containerport = ${INTERNAL_APP_PORT}, protocol = tcp, hostport = ${APP_PORT}}"
 	hpvs quotagroup show --name "${REPO_ID}";
 	hpvs vs show --name=${REPO_ID};
 };
@@ -275,40 +274,40 @@ function clean_up()
 {
 	if hpvs vs show --name "sbserver_${HPVS_NUMBER}" &> /dev/null;
 	then
-		echo -e "\nCleaning up Hyper Protect Virtual Server sbserver_${HPVS_NUMBER}..."
+		echo -e "\nCleaning up Hyper Protect Virtual Server sbserver_${HPVS_NUMBER}...";
 		hpvs vs delete --name "sbserver_${HPVS_NUMBER}";
 	fi;
 	if hpvs quotagroup show --name "sb_user${HPVS_NUMBER}" &> /dev/null;
 	then
-		echo -e "\nCleaning up quotagroup sb_user${HPVS_NUMBER}..."
+		echo -e "\nCleaning up quotagroup sb_user${HPVS_NUMBER}...";
 		hpvs quotagroup delete --name "sb_user${HPVS_NUMBER}";
 	fi;
 	if hpvs vs show --name "${REPO_ID}" &> /dev/null;
 	then
-		echo -e "\nCleaning up Hyper Protect Virtual Server ${REPO_ID}..."
+		echo -e "\nCleaning up Hyper Protect Virtual Server ${REPO_ID}...";
 		hpvs vs delete --name "${REPO_ID}";
 	fi;
 	if hpvs quotagroup show --name "${REPO_ID}" &> /dev/null;
 	then
-		echo -e "\nCleaning up quotagroup ${REPO_ID}..."
+		echo -e "\nCleaning up quotagroup ${REPO_ID}...";
 		hpvs quotagroup delete --name "${REPO_ID}";
 	fi;
 	if hpvs repository show --id "${REPO_ID}" &> /dev/null;
 	then
-		echo -e "\nCleaning up image repository ${REPO_ID}"
+		echo -e "\nCleaning up image repository ${REPO_ID}";
 		hpvs repository delete --id "${REPO_ID}" --force;
 	fi;
 	rm -rf "${SB_DIR}";
 
 	if hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null && [[ "$(hpvs registry list | wc -l)" -ne 4 ]];
 	then
-		echo -e "\nCleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}..."
-		hpvs registry delete --name "${REGISTRY_NAME}"
+		echo -e "\nCleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}...";
+		hpvs registry delete --name "${REGISTRY_NAME}";
 	fi;
 
-	echo -e "\nCurrent state of quotagroups on system"
+	echo -e "\nCurrent state of quotagroups on system";
 	hpvs quotagroup list;
-	echo -e "\nCurrent state of Hyper Protect Virtual Servers on system"
+	echo -e "\nCurrent state of Hyper Protect Virtual Servers on system";
 	hpvs vs list;
 };
 
@@ -323,5 +322,5 @@ secure_build_application;
 delete_git_key;
 verify_application;
 deploy_application;
-echo -e "\n${APP_STRING}"
+echo -e "\n${APP_STRING}";
 #clean_up;

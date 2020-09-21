@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 # Save PROJECT_DIR to use throughout script as directory where project exists
-export PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+export PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )";
 
 # This is the file where user variables are entered
-source user_variables.env
+source user_variables.env;
 
-export gitrepo_ssh="git@github.com:person/repo.git"
+export gitrepo_ssh="git@github.com:person/repo.git";
 # Let's name the ssh-key in get after the hostname with a timestamp:
-export git_ssl_keyid=""
+export git_ssl_keyid="";
 
 function prereq_check()
 {
@@ -36,7 +36,7 @@ function printErr()
 
 function update_image_number()
 {
-	if [ -z "${IMAGE_NUMBER}" ]
+	if [ -z "${IMAGE_NUMBER}" ];
 	then
 		printErr "IMAGE_NUMBER must be set...";
 		exit 1;
@@ -62,22 +62,22 @@ function setup_environment()
 	if ! hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null || [[ "$(hpvs registry list | wc -l)" -eq 4 ]];
 	then
 		echo -e "\n${REGISTRY_NAME} will be added to the script";
-		echo "${DOCKER_API_TOKEN}" | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout
+		echo "${DOCKER_API_TOKEN}" | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout;
 		echo "${DOCKER_API_TOKEN}" | hpvs registry add \
 		--name "${REGISTRY_NAME}" --dct https://notary.docker.io \
 		--url docker.io --user "${DOCKER_USERNAME}"
 		hpvs registry list;
-	fi
+	fi;
 #	Generating SSH key:
-	[[ ! -f "${GITHUB_SSH_KEY}" ]] && ssh-keygen -f "${GITHUB_SSH_KEY}" -t rsa -b 4096 -C "${myemail}" -N ''
-	local sslpub="$(cat ${GITHUB_SSH_KEY}.pub | tail -1)"
+	[[ ! -f "${GITHUB_SSH_KEY}" ]] && ssh-keygen -f "${GITHUB_SSH_KEY}" -t rsa -b 4096 -C "${myemail}" -N '';
+	local sslpub="$(cat ${GITHUB_SSH_KEY}.pub | tail -1)";
 #	git API path for posting a new ssh-key:
-	local git_api_addkey="https://api.github.com/user/keys"
+	local git_api_addkey="https://api.github.com/user/keys";
 #	lets name the ssh-key id with hpvs_key and then the hostname with a timestamp:
-	local git_ssl_keyname="hpvs_key_$(hostname)_$(date +%d-%m-%Y)"
+	local git_ssl_keyname="hpvs_key_$(hostname)_$(date +%d-%m-%Y)";
 
 #	Finally lets post this ssh key:
-	ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts"
+	ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts";
 	git_ssl_keyid="$(curl -s -H "Authorization: token ${GIT_API_TOKEN}" -H "Accept: application/vnd.github.v3+json" -X POST -d "{\"title\":\"${git_ssl_keyname}\",\"key\":\"${sslpub}\"}" "${git_api_addkey}" | jq -r '.id')"
 	ssh -T git@github.com -i "${GITHUB_SSH_KEY}" &> /dev/null
 	# 1 is for regular no access via command line (i.e. success) ... 255 is for login error
@@ -92,7 +92,7 @@ function setup_environment()
 
 function create_certificate_and_key()
 {
-	echo -e "\nCreating certificates and keys for secure image build..."
+	echo -e "\nCreating certificates and keys for secure image build...";
 #	Follows hereupon the tag for the secure docker 
 	local	base_image_tag=$(hpvs image list | awk '($0 ~ /secure-docker-build/) {print $4;}');
 	if [[ -z "${base_image_tag}" ]];

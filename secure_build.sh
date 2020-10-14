@@ -155,10 +155,18 @@ Passphrase: ${passphrase}
 %commit
 %echo done
 EOF
-	gpg --armor --batch --generate-key "${SB_DIR}/registration_keys/${keyName}_definition_keys";
-	gpg --armor --pinentry-mode=loopback --passphrase  "${passphrase}" --export-secret-keys "${keyName}" > "${SB_DIR}/registration_keys/${keyName}.private";
-	gpg --armor --export ${keyName} > "${SB_DIR}/registration_keys/${keyName}.pub";
-	ls ${SB_DIR}/registration_keys/;
+	if [[ ! -f "${SB_DIR}/registration_keys/${keyName}_definition_keys" ]];
+	then
+		echo "No : ${SB_DIR}/registration_keys/${keyName}_definition_keys";
+		return 1;
+	else
+		echo "Yes: ${SB_DIR}/registration_keys/${keyName}_definition_keys";
+		gpg --armor --batch --generate-key "${SB_DIR}/registration_keys/${keyName}_definition_keys";
+		gpg --armor --pinentry-mode=loopback --passphrase  "${passphrase}" --export-secret-keys "${keyName}" > "${SB_DIR}/registration_keys/${keyName}.private";
+		gpg --armor --export ${keyName} > "${SB_DIR}/registration_keys/${keyName}.pub";
+		ls ${SB_DIR}/registration_keys/;
+	fi;
+
 	[[ ! -f "${SB_DIR}/sb_config.yaml" ]] && echo -e "\nGenerating secure build config file..." && cat > "${SB_DIR}/sb_config.yaml" <<EOF
 secure_build_workers:
     sbs:
@@ -311,6 +319,17 @@ function clean_up()
 	hpvs vs list;
 };
 
+function print_url_and_test()
+{
+#	echo -e "\n${APP_STRING}";
+	printf "\n%s\n" "${APP_STRING}";
+	if [[ $(type -P curl) ]];
+	then
+		printf "\nLet's test it with curl:\n";
+		curl http://${SB_IP}:${APP_PORT};
+	fi;
+};
+
 prereq_check;
 ## clean up previous (if using non-incremented image #)
 clean_up;
@@ -322,5 +341,5 @@ secure_build_application;
 delete_git_key;
 verify_application;
 deploy_application;
-echo -e "\n${APP_STRING}";
+print_url_and_test;
 #clean_up;

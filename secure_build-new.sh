@@ -10,6 +10,10 @@ export gitrepo_ssh="git@github.com:person/repo.git";
 # Let's name the ssh-key in get after the hostname with a timestamp:
 export git_ssl_keyid="";
 
+# Make log variables global
+export KEEP_LOG
+export COMMAND_LOG
+
 function prereq_check()
 {
 	# Check if curl exists
@@ -25,6 +29,29 @@ function prereq_check()
 		printErr "Please install jq";
 		exit 1;
 	fi;
+
+	## If KEEP_LOG is set, make sure a file for logging is set in COMMAND_LOG
+	if [[ -n "${KEEP_LOG}" ]] 
+	then
+		SECONDS=0
+		while [[ -z "${COMMAND_LOG}" ]]
+		do
+			if [[ "${SECONDS}" -ge 120 ]]
+			then
+				printErr "You're taking too long to make up your mind, exiting..."
+				exit 1
+			fi 
+			read -t 120 -p "Please enter the name for your logfile : " COMMAND_LOG
+		done
+		# If not an absolute path make the path absolute
+		if [[ "${COMMAND_LOG}" != /* ]]
+		then
+			COMMAND_LOG="${PROJECT_DIR}/${COMMAND_LOG}"
+		else
+			mkdir -p "${COMMAND_LOG%/*}"
+		fi
+		touch "${COMMAND_LOG}"
+	fi
 }
 
 function printErr()
@@ -49,24 +76,24 @@ function update_image_number()
 function setup_environment()
 {
 	local	cmd="setup_environment: Setting up the secure build environment...";
-	[[ -n "${KEEP_LOG}" ]] && echo "# "${cmd} >>${COMMAND_LOG};
-	echo -e ${cmd};
+	[[ -n "${KEEP_LOG}" ]] && echo "# ${cmd}" >> "${COMMAND_LOG}";
+	echo -e "${cmd}";
 
 	#[[ ! -d "${SB_DIR}" ]] && mkdir -p "${SB_DIR}" && cd "${SB_DIR}";
 	#[[ ! -d "${SB_DIR}/github_keys" ]] && mkdir -p "${SB_DIR}/github_keys";
 	if [[ ! -d "${SB_DIR}" ]];
 	then
 		local	cmd="mkdir -p ${SB_DIR}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 		local	cmd="cd ${SB_DIR}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	if [[ ! -d "${SB_DIR}/github_keys" ]];
 	then
 		local	cmd="mkdir -p ${SB_DIR}/github_keys";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	export GITHUB_SSH_KEY="${SB_DIR}/github_keys/github_rsa_hpvs";
@@ -81,25 +108,25 @@ function setup_environment()
 	then
 		echo -e "\n${REGISTRY_NAME} will be added to the script";
 
-		#echo "echo ${DOCKER_API_TOKEN} | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout" >>${COMMAND_LOG};
+		#echo "echo ${DOCKER_API_TOKEN} | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout" >> "${COMMAND_LOG}";
 		#echo "${DOCKER_API_TOKEN}" | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout;
 		local	cmd="echo ${DOCKER_API_TOKEN} | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 
 
 		# add echo command here
-#		printf "echo %s | hpvs registry add --name %s --dct https://notary.docker.io --url docker.io --user %s\n" "${DOCKER_API_TOKEN}" "${REGISTRY_NAME}" "${DOCKER_USERNAME}" >>${COMMAND_LOG};
+#		printf "echo %s | hpvs registry add --name %s --dct https://notary.docker.io --url docker.io --user %s\n" "${DOCKER_API_TOKEN}" "${REGISTRY_NAME}" "${DOCKER_USERNAME}" >> "${COMMAND_LOG}";
 #		echo "${DOCKER_API_TOKEN}" | hpvs registry add \
 #		--name "${REGISTRY_NAME}" --dct https://notary.docker.io \
 #		--url docker.io --user "${DOCKER_USERNAME}";
 
 		local	cmd="echo ${DOCKER_API_TOKEN} | hpvs registry add --name ${REGISTRY_NAME} --dct https://notary.docker.io --url docker.io --user ${DOCKER_USERNAME}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 
 		local	cmd="hpvs registry list";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 #	Generating SSH key:
@@ -114,13 +141,13 @@ function setup_environment()
 #	ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts";
 	local	cmd='ssh-keyscan -H github.com >> '"${HOME}/.ssh/known_hosts";
 #	printf "===\n%s\n===" "${cmd}";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 	git_ssl_keyid="$(curl -s -H "Authorization: token ${GIT_API_TOKEN}" -H "Accept: application/vnd.github.v3+json" -X POST -d "{\"title\":\"${git_ssl_keyname}\",\"key\":\"${sslpub}\"}" "${git_api_addkey}" | jq -r '.id')"
 #	ssh -T git@github.com -i "${GITHUB_SSH_KEY}" &> /dev/null
 	local	cmd="ssh -T git@github.com -i ${GITHUB_SSH_KEY}"' &> /dev/null';
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval ${cmd};
 
 	# 1 is for regular no access via command line (i.e. success) ... 255 is for login error
@@ -136,7 +163,7 @@ function setup_environment()
 function create_certificate_and_key()
 {
 	local	cmd="\nCreating certificates and keys for secure image build...";
-	[[ -n "${KEEP_LOG}" ]] && echo -e ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo -e ${cmd} >> "${COMMAND_LOG}";
 	echo -e ${cmd};
 #	Follows hereupon the tag for the secure docker 
 	local	base_image_tag=$(hpvs image list | awk '($0 ~ /secure-docker-build/) {print $4;}');
@@ -147,22 +174,22 @@ function create_certificate_and_key()
 
 		#hpvs image list;
 		local	cmd="hpvs image list";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 
 	#openssl rand -out "${HOME}/.rnd" -hex 256;
 	local	cmd="openssl rand -out ${HOME}/.rnd -hex 256";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 	#mkdir -p "${SB_DIR}/sbs_keys";
 	local	cmd="mkdir -p ${SB_DIR}/sbs_keys";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 	local	cmd="openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -out ${SB_DIR}/sbs_keys/sbs.cert -keyout ${SB_DIR}/sbs_keys/sbs.key -subj /C=US/O=IBM/CN=hpvs.example.com";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 #	openssl req -newkey rsa:2048 \
@@ -178,7 +205,7 @@ function create_certificate_and_key()
 	echo -e "\nCreating quotagroup sb_user${HPVS_NUMBER} for Hyper Protect Secure Build Server...";
 	#hpvs quotagroup create --name "sb_user${HPVS_NUMBER}" --size=40GB;
 	local	cmd="hpvs quotagroup create --name sb_user${HPVS_NUMBER} --size=40GB";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 	if [[ $(hpvs image list | grep -ic 'SecureDockerBuild') -lt 1 ]];
@@ -308,10 +335,10 @@ function verify_application()
 			return 1;
 		fi;
 	done;
-	printf "hpvs sb manifest --config %s --name %s\n" "${SB_DIR}/sb_config.yaml" "${BUILD_NAME}" >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && printf "hpvs sb manifest --config %s --name %s\n" "${SB_DIR}/sb_config.yaml" "${BUILD_NAME}" >> "${COMMAND_LOG}";
 	hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
 	echo -e "\nRetrieving secure build public key...";
-	printf "hpvs sb pubkey --config %s --name %s\n" "${SB_DIR}/sb_config.yaml" "${BUILD_NAME}" >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && printf "hpvs sb pubkey --config %s --name %s\n" "${SB_DIR}/sb_config.yaml" "${BUILD_NAME}" >> "${COMMAND_LOG}";
 	hpvs sb pubkey --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}";
 	echo -e "\nFiles retrieved:";
 	ls;
@@ -346,13 +373,13 @@ function deploy_application()
 
 function clean_up()
 {
-	printf "# clean up\n" >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && printf "# clean up\n" >> "${COMMAND_LOG}";
 	if hpvs vs show --name "sbserver_${HPVS_NUMBER}" &> /dev/null;
 	then
 		echo -e "\nCleaning up Hyper Protect Virtual Server sbserver_${HPVS_NUMBER}...";
 		#hpvs vs delete --name "sbserver_${HPVS_NUMBER}";
 		local	cmd="hpvs vs delete --name sbserver_${HPVS_NUMBER}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	if hpvs quotagroup show --name "sb_user${HPVS_NUMBER}" &> /dev/null;
@@ -360,7 +387,7 @@ function clean_up()
 		echo -e "\nCleaning up quotagroup sb_user${HPVS_NUMBER}...";
 		#hpvs quotagroup delete --name "sb_user${HPVS_NUMBER}";
 		local	cmd="hpvs quotagroup delete --name sb_user${HPVS_NUMBER}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	if hpvs vs show --name "${REPO_ID}" &> /dev/null;
@@ -368,7 +395,7 @@ function clean_up()
 		echo -e "\nCleaning up Hyper Protect Virtual Server ${REPO_ID}...";
 		#hpvs vs delete --name "${REPO_ID}";
 		local	cmd="hpvs vs delete --name ${REPO_ID}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	if hpvs quotagroup show --name "${REPO_ID}" &> /dev/null;
@@ -376,7 +403,7 @@ function clean_up()
 		echo -e "\nCleaning up quotagroup ${REPO_ID}...";
 		#hpvs quotagroup delete --name "${REPO_ID}";
 		local	cmd="hpvs quotagroup delete --name ${REPO_ID}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 	if hpvs repository show --id "${REPO_ID}" &> /dev/null;
@@ -384,7 +411,7 @@ function clean_up()
 		echo -e "\nCleaning up image repository ${REPO_ID}";
 		#hpvs repository delete --id "${REPO_ID}" --force;
 		local	cmd="hpvs repository delete --id ${REPO_ID} --force";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 
@@ -394,7 +421,7 @@ function clean_up()
 		#hpvs repository delete --id "${REPO_ID}" --force;
 		#rm -rf "${SB_DIR}";
 		local	cmd="rm -rf ${SB_DIR}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 
@@ -403,20 +430,20 @@ function clean_up()
 		echo -e "\nCleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}...";
 		#hpvs registry delete --name "${REGISTRY_NAME}";
 		local	cmd="hpvs registry delete --name ${REGISTRY_NAME}";
-		[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 
 	echo -e "\nCurrent state of quotagroups on system";
 	#hpvs quotagroup list;
 	local	cmd="hpvs quotagroup list";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 
 	echo -e "\nCurrent state of Hyper Protect Virtual Servers on system";
 	#hpvs vs list;
 	local	cmd="hpvs vs list";
-	[[ -n "${KEEP_LOG}" ]] && echo ${cmd} >>${COMMAND_LOG};
+	[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
 	eval "${cmd}";
 };
 
@@ -435,9 +462,7 @@ prereq_check;
 ## clean up previous (if using non-incremented image #)
 clean_up;
 ## update IMAGE_NUMBER for new run
-##update_image_number && source user_variables.env;
-## create the log file with the new IMAGE_NUMBER
-[[ -n "${KEEP_LOG}" ]] && touch ${COMMAND_LOG};
+update_image_number && source user_variables.env;
 setup_environment;
 create_certificate_and_key;
 secure_build_application;

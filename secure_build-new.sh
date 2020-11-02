@@ -12,7 +12,8 @@ export gitrepo_ssh="git@github.com:person/repo.git";
 export git_ssl_keyid="";
 
 # Make log variables global
-export KEEP_LOG='Y';
+export KEEP_TXT_LOG='Y';
+export KEEP_CMD_LOG='Y';
 export COMMAND_LOG='HPVS-command-log';
 
 function prereq_check()
@@ -32,7 +33,7 @@ function prereq_check()
 	fi;
 
 	## If KEEP_LOG is set, make sure a file for logging is set in COMMAND_LOG
-	if [[ -n "${KEEP_LOG}" ]];
+	if [[ -n "${KEEP_CMD_LOG}" || -n "${KEEP_TXT_LOG}" ]];
 	then
 		SECONDS=0;
 		while [[ -z "${COMMAND_LOG}" ]];
@@ -70,7 +71,7 @@ function printErr()
 function log_and_print()
 {
 	local	output=${1:-"No print parameter provided, when ${FUNCNAME} was called by $_"};
-	[[ -n "${KEEP_LOG}" ]] && echo -e "# "${output} >> "${COMMAND_LOG}";
+	[[ "${KEEP_TXT_LOG}" == "Y" ]] && echo -e "# "${output} >> "${COMMAND_LOG}";
 	echo -e ${output};
 };
 
@@ -79,7 +80,7 @@ function log_and_execute()
 	if [[ $# -eq 1 ]];
 	then
 		local	cmd=${1};
-		[[ -n "${KEEP_LOG}" ]] && echo "${cmd}" >> "${COMMAND_LOG}";
+		[[ "${KEEP_CMD_LOG}" == "Y" ]] && echo ${cmd} >> "${COMMAND_LOG}";
 		eval "${cmd}";
 	fi;
 };
@@ -92,7 +93,7 @@ function update_image_number()
 		exit 1;
 	fi;
 	export IMAGE_NUMBER="$(( IMAGE_NUMBER + 1 ))";
-	echo -e "\nIncremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n";
+	log_and_print "Incremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n";
 	echo "${IMAGE_NUMBER}" > "${PROJECT_DIR}/IMAGE_NUMBER.txt";
 }
 
@@ -119,7 +120,7 @@ function setup_environment()
 	# Add hpvs registry with username and password (token provided) if it doesn't exist already
 	if ! hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null || [[ "$(hpvs registry list | wc -l)" -eq 4 ]];
 	then
-		echo -e "\n${REGISTRY_NAME} will be added to the script";
+		log_and_print "${REGISTRY_NAME} will be added to the script";
 		local	cmd="echo ${DOCKER_API_TOKEN} | docker login -u ${DOCKER_USERNAME} --password-stdin && docker logout";
 		log_and_execute "${cmd}";
 		local	cmd="
@@ -158,7 +159,7 @@ function setup_environment()
 
 function create_certificate_and_key()
 {
-	log_and_print "\nCreating certificates and keys for secure image build...";
+	log_and_print "Creating certificates and keys for secure image build...\n";
 #	Follows hereupon the tag for the secure docker 
 	local	base_image_tag=$(hpvs image list | awk '($0 ~ /secure-docker-build/) {print $4;}');
 	if [[ -z "${base_image_tag}" ]];
@@ -185,13 +186,13 @@ function create_certificate_and_key()
 	echo $(cat "${SB_DIR}/sbs_keys/sbs.cert" | base64) | tr -d ' ' > "${SB_DIR}/sbs_keys/sbs_base64.cert";
 	export cert=$(cat "${SB_DIR}/sbs_keys/sbs_base64.cert");
 
-	echo -e "\nCreating quotagroup sb_user${HPVS_NUMBER} for Hyper Protect Secure Build Server...";
+	log_and_print "Creating quotagroup sb_user${HPVS_NUMBER} for Hyper Protect Secure Build Server...";
 	local	cmd="hpvs quotagroup create --name sb_user${HPVS_NUMBER} --size=40GB";
 	log_and_execute "${cmd}";
 
 	if [[ $(hpvs image list | grep -ic 'SecureDockerBuild') -lt 1 ]];
 	then
-		echo -e "\nCreating Hyper Protect Secure Build Server: sbserver_${HPVS_NUMBER}...";
+		log_and_print "Creating Hyper Protect Secure Build Server: sbserver_${HPVS_NUMBER}...";
 		local cmd="
 		hpvs vs create --name sbserver_${HPVS_NUMBER} --repo SecureDockerBuild \
 		--tag ${base_image_tag} --cpu 2 --ram 2048 \
@@ -212,7 +213,7 @@ function create_certificate_and_key()
 
 function secure_build_application()
 {
-	log_and_print "\nGenerating GPG keys to encrypt the image repository definition once the image is built...";
+	log_and_print "Generating GPG keys to encrypt the image repository definition once the image is built...";
 	export keyName="secure_bitcoin_key${RANDOM}";
 	export passphrase="test_passphrase";
 	[[ ! -d "${SB_DIR}/registration_keys" ]] && mkdir -p "${SB_DIR}/registration_keys";
@@ -283,11 +284,11 @@ EOF
 		echo -e "\nWaiting for Secure Build Server to become available for initialization...taking a 20 second nap.";
 		sleep 20;
 	done;
-	echo -e "\nSecure build server initialized";
-	echo -e "\nSecurely Building Container Image: ${IMAGE_NAME}...";
+	log_and_print "Secure build server initialized";
+	log_and_print "Securely Building Container Image: ${IMAGE_NAME}...";
 	local	cmd="hpvs sb build --timeout 20 --config ${SB_DIR}/sb_config.yaml";
 	log_and_execute "${cmd}";
-	echo -e "\nEncrypting registration file with GPG key...";
+	log_and_print "Encrypting registration file with GPG key...";
 	local	cmd="echo ${passphrase} | hpvs sb regfile --config ${SB_DIR}/sb_config.yaml --out ${SB_DIR}/yaml.${REPO_ID}.enc";
 	log_and_execute "${cmd}";
 };
@@ -298,12 +299,12 @@ function delete_git_key()
 	local git_api_keyurl="https://api.github.com/user/keys/${git_ssl_keyid}";
 	if [[ -n "${git_ssl_keyid}" ]];
 	then
-		log_and_print "\nFor Git Hub account assocaited with the provided GIT_API_TOKEN:";
-		echo -e "\tRemoving git key ID: ${git_ssl_keyid}...";
+		log_and_print "For Git Hub account assocaited with the provided GIT_API_TOKEN:";
+		log_and_print "\tRemoving git key ID: ${git_ssl_keyid}...";
 		local	cmd="curl -H \"Authorization: token ${GIT_API_TOKEN}\" -H \"Accept: application/vnd.github.v3+json\" -X DELETE \"${git_api_keyurl}\"";
 		log_and_execute "${cmd}";
 	else
-		echo -e "\nA git key hasn't been uploaded at this point in the script run.";
+		log_and_print "A git key hasn't been uploaded at this point in the script run.";
 	fi; 
 }
 
@@ -313,12 +314,12 @@ function verify_application()
 	log_and_execute "${cmd}";
 	pushd "${SB_DIR}/manifest" > /dev/null;
 	export BUILD_NAME="$(hpvs sb status --config "${SB_DIR}/sb_config.yaml" | grep build_name | egrep -ow 'docker.*[[:digit:]]')";
-	echo -e "\nRetrieving secure build manifest...";
+	log_and_print "Retrieving secure build manifest...";
 	local manifest_tries=0;
 	until hpvs sb manifest --config "${SB_DIR}/sb_config.yaml" --name "${BUILD_NAME}" &> /dev/null;
 	do
 		sleep 1;
-		echo -e "\nCould not retrieve manifest\nRetrying...";
+		log_and_print "Could not retrieve manifest\nRetrying...";
 		manifest_tries="$(( manifest_tries + 1 ))";
 		if [[ manifest_tries -gt 3 ]];
 		then
@@ -328,14 +329,14 @@ function verify_application()
 	done;
 	local	cmd="hpvs sb manifest --config ${SB_DIR}/sb_config.yaml --name ${BUILD_NAME}";
 	log_and_execute "${cmd}";
-	echo -e "\nRetrieving secure build public key...";
+	log_and_print "Retrieving secure build public key...";
 	local	cmd="hpvs sb pubkey --config ${SB_DIR}/sb_config.yaml --name ${BUILD_NAME}";
 	log_and_execute "${cmd}";
-	echo -e "\nFiles retrieved:";
+	log_and_print "Files retrieved:";
 	ls;
 	export MANIFEST="${SB_DIR}/manifest/manifest.${BUILD_NAME}";
 	export MAN_PUBKEY="${SB_DIR}/manifest/${BUILD_NAME}-public.pem";
-	echo -e "\nVerifying build integrity with manifest and public key...";
+	log_and_print "Verifying build integrity with manifest and public key...";
 	local	cmd="tar -xjvf ${MANIFEST}.sig.tbz > /dev/null && rm ${MANIFEST}.sig.tbz";
 	log_and_execute "${cmd}";
 	local	cmd="cat ${MANIFEST}.sig | xxd -r -p > ${MANIFEST}.sig.bin";
@@ -346,8 +347,14 @@ function verify_application()
 	log_and_execute "${cmd}";
 	local	cmd="tar -xjf ${MANIFEST}.tbz -C ${SB_DIR}/manifest/manifest_files";
 	log_and_execute "${cmd}";
-	pushd "${SB_DIR}/manifest/manifest_files" > /dev/null && echo -e "\nManifest file directory structure" && ls;
-	popd > /dev/null;
+	pushd "${SB_DIR}/manifest/manifest_files" > /dev/null;
+	if [[ $? -eq 0 ]];
+	then
+		log_and_print "Manifest file directory structure";
+		local cmd="ls";
+		log_and_execute;
+		popd > /dev/null;
+	fi;
 	popd > /dev/null;
 };
 
@@ -359,15 +366,15 @@ function roll_in_the_maid()
 
 function deploy_application()
 {
-	log_and_print "\nRegistering ${REPO_ID} container repository with Hyper Protect Virtual Servers appliance...";
+	log_and_print "Registering ${REPO_ID} container repository with Hyper Protect Virtual Servers appliance...";
 	local	cmd="hpvs repository register --pgp=${SB_DIR}/yaml.${REPO_ID}.enc --id=${REPO_ID}";
 	log_and_execute "${cmd}";
 
-	log_and_print "\nCreating quotagroup to deploy application using image repository: ${REPO_ID}...";
+	log_and_print "Creating quotagroup to deploy application using image repository: ${REPO_ID}...";
 	local	cmd="hpvs quotagroup create --name=${REPO_ID} --size=5GB";
 	log_and_execute "${cmd}";
 
-	log_and_print "\nCreating Hyper Protect Virtual Servers application using image repository: ${REPO_ID}...";
+	log_and_print "Creating Hyper Protect Virtual Servers application using image repository: ${REPO_ID}...";
 	export APP_PORT=301${HPVS_NUMBER};
 	local	cmd="
 	hpvs vs create --name=${REPO_ID} --repo ${REPO_ID} \
@@ -383,57 +390,57 @@ function deploy_application()
 
 function clean_up()
 {
-	[[ -n "${KEEP_LOG}" ]] && printf "# clean up\n" >> "${COMMAND_LOG}";
+	log_and_print "Starting the cleanup process\n";
 	if hpvs vs show --name "sbserver_${HPVS_NUMBER}" &> /dev/null;
 	then
-		echo -e "\nCleaning up Hyper Protect Virtual Server sbserver_${HPVS_NUMBER}...";
+		log_and_print "Cleaning up Hyper Protect Virtual Server sbserver_${HPVS_NUMBER}...";
 		local	cmd="hpvs vs delete --name sbserver_${HPVS_NUMBER}";
 		log_and_execute "${cmd}";
 	fi;
 	if hpvs quotagroup show --name "sb_user${HPVS_NUMBER}" &> /dev/null;
 	then
-		echo -e "\nCleaning up quotagroup sb_user${HPVS_NUMBER}...";
+		log_and_print "Cleaning up quotagroup sb_user${HPVS_NUMBER}...";
 		local	cmd="hpvs quotagroup delete --name sb_user${HPVS_NUMBER}";
 		log_and_execute "${cmd}";
 	fi;
 	if hpvs vs show --name "${REPO_ID}" &> /dev/null;
 	then
-		log_and_print "\nCleaning up Hyper Protect Virtual Server ${REPO_ID}...";
+		log_and_print "Cleaning up Hyper Protect Virtual Server ${REPO_ID}...";
 		local	cmd="hpvs vs delete --name ${REPO_ID}";
 		log_and_execute "${cmd}";
 	fi;
 	if hpvs quotagroup show --name "${REPO_ID}" &> /dev/null;
 	then
-		log_and_print "\nCleaning up quotagroup ${REPO_ID}...";
+		log_and_print "Cleaning up quotagroup ${REPO_ID}...";
 		local	cmd="hpvs quotagroup delete --name ${REPO_ID}";
 		log_and_execute "${cmd}";
 	fi;
 	if hpvs repository show --id "${REPO_ID}" &> /dev/null;
 	then
-		log_and_print "\nCleaning up image repository ${REPO_ID}";
+		log_and_print "Cleaning up image repository ${REPO_ID}";
 		local	cmd="hpvs repository delete --id ${REPO_ID} --force";
 		log_and_execute "${cmd}";
 	fi;
 
 	if [[ -d "${SB_DIR}" ]];
 	then
-		echo -e "\nRemoving directory ${SB_DIR}";
+		log_and_print "Removing directory ${SB_DIR}";
 		local	cmd="rm -rf ${SB_DIR}";
 		log_and_execute "${cmd}";
 	fi;
 
 	if hpvs registry show --name "${REGISTRY_NAME}" &> /dev/null && [[ "$(hpvs registry list | wc -l)" -ne 4 ]];
 	then
-		log_and_print "\nCleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}...";
+		log_and_print "Cleaning up Hyper Protect registry credentials for registry: ${REGISTRY_NAME}...";
 		local	cmd="hpvs registry delete --name ${REGISTRY_NAME}";
 		log_and_execute "${cmd}";
 	fi;
 
-	log_and_print "\nCurrent state of quotagroups on system";
+	log_and_print "Current state of quotagroups on system";
 	local	cmd="hpvs quotagroup list";
 	log_and_execute "${cmd}";
 
-	log_and_print "\nCurrent state of Hyper Protect Virtual Servers on system";
+	log_and_print "Current state of Hyper Protect Virtual Servers on system";
 	local	cmd="hpvs vs list";
 	log_and_execute "${cmd}";
 };
@@ -443,7 +450,7 @@ function print_url_and_test()
 	printf "\n%s\n" "${APP_STRING}";
 	if [[ $(type -P curl) ]];
 	then
-		log_and_print "\nLet's test it with curl:\n";
+		log_and_print "Let's test it with curl:\n";
 		local	cmd="curl http://${SB_IP}:${APP_PORT}";
 		log_and_execute "${cmd}";
 	fi;
@@ -466,6 +473,8 @@ cleanup_prompt()
 	fi;
 };
 
+log_and_print "\n";
+log_and_print "Starting at $(date)";
 prereq_check;
 ## clean up previous (if using non-incremented image #)
 clean_up;
@@ -481,4 +490,5 @@ roll_in_the_maid;
 deploy_application;
 print_url_and_test;
 #clean_up;
+log_and_print "Complete at $(date)";
 

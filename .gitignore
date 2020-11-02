@@ -1,2 +1,2 @@
-user_variables_ignore.env
+user_variables*
 IMAGE_NUMBER.txt

@@ -469,7 +469,11 @@ cleanup_prompt()
 prereq_check;
 ## clean up previous (if using non-incremented image #)
 clean_up;
-cleanup_prompt "n";
+<<<<<<< HEAD
+cleanup_prompt;
+=======
+cleanup_prompt;
+>>>>>>> stuart
 ## update IMAGE_NUMBER for new run
 update_image_number && source user_variables.env;
 setup_environment;

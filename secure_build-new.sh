@@ -70,7 +70,7 @@ function printErr()
 function log_and_print()
 {
 	local	output=${1:-"No print parameter provided, when ${FUNCNAME} was called by $_"};
-	[[ -n "${KEEP_LOG}" ]] && echo -e ${output} >> "${COMMAND_LOG}";
+	[[ -n "${KEEP_LOG}" ]] && echo -e "# "${output} >> "${COMMAND_LOG}";
 	echo -e ${output};
 };
 
@@ -449,11 +449,27 @@ function print_url_and_test()
 	fi;
 };
 
+cleanup_prompt()
+{
+	local	time_to_wait=20;
+	local	cleanup=${1:-""};
+
+	if [[ -z ${cleanup} ]];
+	then
+		printf "\n";
+		printf "If you do not respond, the script will perform a secure build.\n";
+		printf "If you reply 'y' within the next 15 seconds, then the script will stop.\n";
+		printf "\n";
+		read -t ${time_to_wait} -p "Clean_up only?" cleanup;
+	else
+		[[ "${cleanup}" == "y" ]] && exit $?;
+	fi;
+};
+
 prereq_check;
 ## clean up previous (if using non-incremented image #)
 clean_up;
-read -t 15 -p "Clean_up only?" cleanup;
-[[ "${cleanup}" == "y" ]] && exit $?;
+cleanup_prompt "n";
 ## update IMAGE_NUMBER for new run
 update_image_number && source user_variables.env;
 setup_environment;

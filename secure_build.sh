@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
 
-# Save PROJECT_DIR to use throughout script as directory where project exists
-#export PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )";
-export PROJECT_DIR=~;
-
-# This is the file where user variables are entered
-source user_variables.env;
-
-export gitrepo_ssh="git@github.com:person/repo.git";
-# Let's name the ssh-key in get after the hostname with a timestamp:
-export git_ssl_keyid="";
-
-# Make log variables global
-export KEEP_TXT_LOG='Y';
-export KEEP_CMD_LOG='Y';
-export COMMAND_LOG='HPVS-command-log';
+#	Exit codes
+#	1	- curl not installed
+#	2	- jq not installed
+#	3	- User never entered logfile name, waited too long.
+#	4	- when log_and_execute called, no command parameter was provided
+#	5	- image number not set properly
+#	6	- git hub key add failed
+#	7	- Secure Docker Build Image does not exist
+#	8	- User selected clean-up only
+#   9   - No user_variables.env file
 
 function prereq_check()
 {
@@ -29,7 +24,7 @@ function prereq_check()
 	if ! command -v jq &> /dev/null;
 	then
 		printErr "Please install jq";
-		exit 1;
+		exit 2;
 	fi;
 
 	## If KEEP_LOG is set, make sure a file for logging is set in COMMAND_LOG
@@ -41,7 +36,7 @@ function prereq_check()
 			if [[ "${SECONDS}" -ge 120 ]];
 			then
 				printErr "You're taking too long to make up your mind, exiting...";
-				exit 1;
+				exit 3;
 			fi ;
 			read -t 120 -p "Please enter the name for your logfile : " COMMAND_LOG;
 		done;
@@ -50,38 +45,42 @@ function prereq_check()
 		then
 			COMMAND_LOG="${PROJECT_DIR}/${COMMAND_LOG}";
 		else
-			local	cmd="mkdir -p ${COMMAND_LOG%/*}";
+			local	cmd="mkdir -p "${COMMAND_LOG%/*};
 			log_and_execute "${cmd}";
 		fi;
 		printf "Command log: %s\n" "${COMMAND_LOG}";
-		local	cmd="touch ${COMMAND_LOG}";
+		local	cmd="touch "${COMMAND_LOG};
 		log_and_execute "${cmd}";
 	else
 		printf "No logging will be taking place KEEP_LOG not set to 'Y'\n";
 	fi;
-}
+};
 
 function printErr()
 {
-	echo
+	echo;
 	cat <<< "$@" 1>&2;
-	echo
-}
+	echo;
+};
 
 function log_and_print()
 {
 	local	output=${1:-"No print parameter provided, when ${FUNCNAME} was called by $_"};
+	local	KEEP_TXT_LOG=${2:-${KEEP_TXT_LOG}};
 	[[ "${KEEP_TXT_LOG}" == "Y" ]] && echo -e "# "${output} >> "${COMMAND_LOG}";
 	echo -e ${output};
 };
 
 function log_and_execute()
 {
-	if [[ $# -eq 1 ]];
+	if [[ $# -gt 0 ]];
 	then
 		local	cmd=${1};
 		[[ "${KEEP_CMD_LOG}" == "Y" ]] && echo ${cmd} >> "${COMMAND_LOG}";
 		eval "${cmd}";
+	else
+		printf "No command parameter provided, please provide a parameter of a command to execute.\n";
+		exit 4;
 	fi;
 };
 
@@ -90,12 +89,12 @@ function update_image_number()
 	if [ -z "${IMAGE_NUMBER}" ];
 	then
 		printErr "IMAGE_NUMBER must be set...";
-		exit 1;
+		exit 5;
 	fi;
 	export IMAGE_NUMBER="$(( IMAGE_NUMBER + 1 ))";
 	log_and_print "Incremented IMAGE_NUMBER to: ${IMAGE_NUMBER}\n";
 	echo "${IMAGE_NUMBER}" > "${PROJECT_DIR}/IMAGE_NUMBER.txt";
-}
+};
 
 function setup_environment()
 {
@@ -153,7 +152,7 @@ function setup_environment()
 		echo 'end setup_environment()';
 	else
 		printErr "Adding Git Hub key failed";
-		exit 1;
+		exit 6;
 	fi;
 };
 
@@ -205,7 +204,7 @@ function create_certificate_and_key()
 	else
 		printErr "Image SecureDockerBuild doesn't exist please upload it";
 		printErr "We can go no further without it...";
-		exit 1;
+		exit 7;
 	fi;
 };
 
@@ -306,7 +305,7 @@ function delete_git_key()
 	else
 		log_and_print "A git key hasn't been uploaded at this point in the script run.";
 	fi; 
-}
+};
 
 function verify_application()
 {
@@ -352,7 +351,7 @@ function verify_application()
 	then
 		log_and_print "Manifest file directory structure";
 		local cmd="ls";
-		log_and_execute;
+		log_and_execute "${cmd}";
 		popd > /dev/null;
 	fi;
 	popd > /dev/null;
@@ -467,20 +466,25 @@ cleanup_prompt()
 		printf "If you do not respond, the script will perform a secure build.\n";
 		printf "If you reply 'y' within the next 15 seconds, then the script will stop.\n";
 		printf "\n";
-		read -t ${time_to_wait} -p "Clean_up only?" cleanup;
-	else
-		[[ "${cleanup}" == "y" ]] && exit $?;
+		read -t ${time_to_wait} -n 1 -p "Clean_up only?" cleanup;
 	fi;
+	[[ "${cleanup}" == "y" ]] && exit 8;
 };
 
-log_and_print "\n";
-log_and_print "Starting at $(date)";
+# Get directory where script exists (using path to directory that script exists in) so if run from alternate directory it will still work
+export PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )";
+
+# This is the file where user variables are entered
+source default_variables.env;
+
+log_and_print " " "Y";
+log_and_print "Starting at $(date)" "Y";
 prereq_check;
-## clean up previous (if using non-incremented image #)
+#	clean up previous (if using non-incremented image #)
 clean_up;
 cleanup_prompt;
-## update IMAGE_NUMBER for new run
-update_image_number && source user_variables.env;
+#	update IMAGE_NUMBER for new run
+update_image_number && source default_variables.env;
 setup_environment;
 create_certificate_and_key;
 secure_build_application;
@@ -490,5 +494,5 @@ roll_in_the_maid;
 deploy_application;
 print_url_and_test;
 #clean_up;
-log_and_print "Complete at $(date)";
+log_and_print "Complete at $(date)" "Y";
 

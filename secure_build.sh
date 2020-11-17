@@ -159,8 +159,10 @@ function setup_environment()
 function create_certificate_and_key()
 {
 	log_and_print "Creating certificates and keys for secure image build...\n";
-#	Follows hereupon the tag for the secure docker 
-	local	base_image_tag=$(hpvs image list | awk '($0 ~ /secure-docker-build/) {print $4;}');
+#	Follows hereupon the tag for the newest secure docker build
+#   Since highest number first sort and then take first secure-docker-build image by exiting after match
+	base_image_tag="$(hpvs image list | sort -nr | awk '($0 ~ /secure-docker-build/) {print $4;exit;}')";
+
 	if [[ -z "${base_image_tag}" ]];
 	then
 		echo -e "\nPlease note (as shown below) that the secure docker build image is not loaded";
